@@ -1,0 +1,183 @@
+{% extends 'game/layout.html' %}
+
+{% block head %}
+    <style>
+        h1 {
+            font-family: 'Jokerman';
+            color: white;
+            letter-spacing: 25px;
+        }
+
+        h3, h4 {
+            color: white;
+            font-family: 'Consolas';
+        }
+
+        .bingo-default {
+            color: white;
+            font-size: xx-large;
+            padding: 20px;
+            word-spacing: 20px;
+            font-family: Jokerman;
+            font-weight: 100;
+        }
+
+        .won {
+            font-size: xx-large;
+            font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+            color: darkgreen;
+            font-weight: 100;
+        }
+
+        .lost {
+            font-weight: 100;
+            font-size: xx-large;
+            color: darkred;
+            font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+        }
+    </style>
+    <title>BINGO!</title>
+{% endblock %}
+
+{% block body %}
+    <center>
+        <div>
+            <h3>Hello {{ me }}</h3>
+            <h4>You are playing against {{ oppo }}</h4>
+        </div>
+        <div id="game" style="pointer-events: none;">
+        </div>
+        <br><br>
+        <div>
+            <span class="bingo-default" id="letter0">B</span>
+            <span class="bingo-default" id="letter1">I</span>
+            <span class="bingo-default" id="letter2">N</span>
+            <span class="bingo-default" id="letter3">G</span>
+            <span class="bingo-default" id="letter4">O</span>
+        </div>
+        <div class="won" style="display: none;">
+            You Won the match {{ me }}! :)
+        </div>
+        <div class="lost" style="display: none">
+            You Lost the match {{ me }}! :(
+        </div>
+    </center>
+    <script>
+        let csrftoken = '{{ csrf_token }}';
+        let randomState = '{{ randomState }}';
+        randomState = JSON.parse(randomState);
+        for (let i = 0; i < 25; i++) {
+            const button = document.createElement('input');
+            button.type = 'button';
+            button.id = 'but' + randomState[i];
+            button.value = randomState[i];
+            button.style.width = '50px';
+            button.style.height = '50px';
+            button.style.border = 'solid #000000 5px';
+            button.style.margin = '2px';
+
+            button.onmouseover = () => {
+                button.style.backgroundColor = '#000000';
+                button.style.color = '#ffffff';
+                button.style.cursor = 'pointer';
+            }
+
+            button.onmouseleave = () => {
+                button.style.backgroundColor = '#ffffff';
+                button.style.color = '#000000';
+                button.style.cursor = 'default';
+            }
+
+            button.onclick = () => {
+                document.querySelector("#game").style.pointerEvents = 'none';
+                button.style.backgroundColor = '#009900';
+                button.style.color = '#ffffff';
+
+                if (button.onmouseleave === null) return;
+                if (button.onmouseover === null) return;
+
+                var csrftoekn = '{{ csrf_token }}';
+                fetch("{% url 'game:processGameState' %}", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        'clicked': button.value,
+                        'me': '{{ me }}',
+                        'oppo': '{{ oppo }}'
+                    }),
+                    headers: {"X-CSRFToken": csrftoken}
+                }).then(result => {
+                    console.log(result.text());
+                })
+
+                button.onmouseleave = null;
+                button.onmouseover = null;
+            }
+            
+            if (i % 5 == 0) {
+                document.querySelector('#game')
+                .appendChild(document.createElement('br'));
+
+            }
+            document.querySelector("#game")
+            .appendChild(button);
+        }
+    </script>
+    <script>
+        clickButton = function(value) {
+            var button = document.querySelector(`#but${value}`);
+            if (button) {
+                button.onmouseleave = null;
+                button.onmouseover = null;
+                button.click();
+            }
+        }
+
+        winstatefn = function(value) {
+            var button = document.querySelector(`#but${value}`);
+            if (button) {
+                button.style.backgroundColor = 'darkgray';
+            }
+        }
+    </script>
+    {% for val in gamestate %}
+    <script>
+        clickButton('{{ val }}')
+    </script>
+    {% endfor %}
+    <script>
+        getGameState = setInterval(function() {
+            fetch("{% url 'game:refGame' me oppo %}")
+            .then(res => res.json())
+            .then(data => {
+                data['gamestate'].forEach(clickButton);
+                for (let i = 0; i < data['winstate'].length; i++) {
+                    document.querySelector(`#letter${i}`)
+                    .style.color = 'green';
+                }
+                data['winstate'].forEach((arr) => {
+                    arr.forEach(winstatefn);
+                })
+                if (data['curplayer'] == ('gameover' + '{{ me }}')) {
+                    document.querySelector('.won')
+                    .style.display = 'block';
+                    document.body.style.pointerEvents = 'none';
+                    clearInterval(getGameState);
+                    return;
+
+                } else if (data['curplayer'] == ('gameover' + '{{ oppo }}')) {
+                    document.querySelector('.lost')
+                    .style.display = 'block';
+                    document.body.style.pointerEvents = 'none';
+                    clearInterval(getGameState);
+                    return;
+
+                } else if (data['curplayer'] == '{{ me }}') {
+                    document.querySelector("#game").style.pointerEvents = 'auto';
+                } else {
+                    document.querySelector("#game").style.pointerEvents = 'none';
+                }
+            })
+            .catch(error => console.error(error));
+        }, 1000);
+    </script>
+{% endblock %}
